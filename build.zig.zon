@@ -1,0 +1,13 @@
+.{
+    .name = .ConsoleCalculator,
+    .version = "0.0.0",
+    .fingerprint = 0xe42d01848d9fb24f, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.15.0-dev.919+044ccf413",
+    .dependencies = .{
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
