@@ -100,12 +100,12 @@ pub const Token = union(TokenTag) {
 pub const TokenizeError = error{
     InvalidCharacter,
     InvalidFunction,
-};
+} || std.mem.Allocator.Error;
 
 data: []const u8,
 index: usize = 0,
 
-pub fn tokens(self: *Tokenizer, allocator: std.mem.Allocator) (TokenizeError || std.mem.Allocator.Error)![]Token {
+pub fn tokens(self: *Tokenizer, allocator: std.mem.Allocator) TokenizeError![]Token {
     var collection = std.ArrayList(Token).init(allocator);
     defer collection.deinit();
 
