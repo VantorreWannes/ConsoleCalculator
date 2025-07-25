@@ -25,8 +25,25 @@ pub fn parse(self: *Parser) ParseError!Number {
 
 // expression -> term (('+' | '-') term)*
 pub fn parseExpression(self: *Parser) ParseError!Number {
-    self.index += 1;
-    return Number.init(1, 0);
+    var term = try self.parseTerm();
+    while (self.index < self.tokens.len) {
+        const token = self.tokens[self.index];
+        if (std.meta.activeTag(token) != TokenTag.operator) break;
+        switch (token.operator) {
+            .add => {
+                self.index += 1;
+                const other_term = try self.parseTerm();
+                term = term.add(other_term);
+            },
+            .subtract => {
+                self.index += 1;
+                const other_term = try self.parseTerm();
+                term = term.sub(other_term);
+            },
+            else => break,
+        }
+    }
+    return term;
 }
 
 // term -> factor (('*' | '/') factor)*
@@ -46,7 +63,7 @@ pub fn parseTerm(self: *Parser) ParseError!Number {
                 const other_factor = try self.parseFactor();
                 factor = factor.div(other_factor);
             },
-            else => return ParseError.InvalidToken,
+            else => break,
         }
     }
     return factor;
@@ -77,6 +94,57 @@ pub fn parseFactor(self: *Parser) ParseError!Number {
             return factor.neg();
         },
         else => return ParseError.InvalidToken,
+    }
+}
+
+
+// expression -> term (('+' | '-') term)*
+test parseExpression {
+    // expression -> term
+    {
+        const tokens = [_]Token{Token{ .number = Token.Number.init(2, 0) }};
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseExpression();
+        const expected = Token.Number.init(2, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // expression -> term '+' term
+    {
+        const tokens = [_]Token{ Token{ .number = Token.Number.init(2, 0) }, Token{ .operator = .add } };
+        var parser = Parser.init(&tokens);
+        const result = parser.parseExpression();
+        try std.testing.expectError(ParseError.MissingTokens, result);
+    }
+    {
+        const tokens = [_]Token{
+            Token{ .number = Token.Number.init(2, 0) },
+            Token{ .operator = .add },
+            Token{ .number = Token.Number.init(2, 0) },
+        };
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseExpression();
+        const expected = Token.Number.init(4, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // expression -> term '-' term
+    {
+        const tokens = [_]Token{ Token{ .number = Token.Number.init(2, 0) }, Token{ .operator = .subtract } };
+        var parser = Parser.init(&tokens);
+        const result = parser.parseExpression();
+        try std.testing.expectError(ParseError.MissingTokens, result);
+    }
+    {
+        const tokens = [_]Token{
+            Token{ .number = Token.Number.init(2, 0) },
+            Token{ .operator = .subtract },
+            Token{ .number = Token.Number.init(2, 0) },
+        };
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseExpression();
+        const expected = Token.Number.init(0, 0);
+        try std.testing.expectEqual(expected, result);
     }
 }
 
