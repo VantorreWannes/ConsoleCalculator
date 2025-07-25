@@ -81,6 +81,39 @@ fn parseFactor(self: *Parser) ParseError!Number {
             self.index += 1;
             return number;
         },
+        .parenthesis => |parenthesis| {
+            if (parenthesis != .open) return ParseError.InvalidToken;
+            self.index += 1;
+            const expression = try self.parseExpression();
+            if (self.index >= self.tokens.len) return ParseError.MissingTokens;
+            const token = self.tokens[self.index];
+            if (std.meta.activeTag(token) != TokenTag.parenthesis or token.parenthesis != .close) return ParseError.MissingTokens;
+            self.index += 1;
+            return expression;
+        },
+        .operator => |operator| {
+            if (operator != .minus) return ParseError.InvalidToken;
+            self.index += 1;
+            const factor = try self.parseFactor();
+            return factor.neg();
+        },
+        .function => |function| {
+            self.index += 1;
+            {
+                if (self.index >= self.tokens.len) return ParseError.MissingTokens;
+                const token = self.tokens[self.index];
+                if (std.meta.activeTag(token) != TokenTag.parenthesis or token.parenthesis != .open) return ParseError.MissingTokens;
+            }
+            self.index += 1;
+            const argument = try self.parseExpression();
+            {
+                if (self.index >= self.tokens.len) return ParseError.MissingTokens;
+                const token = self.tokens[self.index];
+                if (std.meta.activeTag(token) != TokenTag.parenthesis or token.parenthesis != .close) return ParseError.MissingTokens;
+            }
+            self.index += 1;
+            return applyFunction(function, argument);
+        },
     }
 }
 
@@ -129,4 +162,65 @@ pub fn applyFunction(function: Token.Function, number: Number) Number {
         .inverseHyperbolicCosine => std.math.complex.acosh(number),
         .inverseHyperbolicTangent => std.math.complex.atanh(number),
     };
+}
+
+// factor -> NUMBER | CONSTANT | FUNCTION '(' expression ')' | '(' expression ')' | '-' factor
+test parseFactor {
+
+    // factor -> NUMBER
+    {
+        const tokens = [_]Token{Token{ .number = Token.Number.init(1, 0) }};
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseFactor();
+        const expected = Token.Number.init(1, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // factor -> CONSTANT
+    {
+        const tokens = [_]Token{Token{ .number = Token.Number.init(0, 1) }};
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseFactor();
+        const expected = Token.Number.init(0, 1);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // factor -> FUNCTION '(' expression ')'
+    {
+        const tokens = [_]Token{ Token{ .function = .absolute }, Token{ .parenthesis = .open }, Token{ .number = Token.Number.init(1, 1) }, Token{ .parenthesis = .close } };
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseFactor();
+        const expected = Token.Number.init(1, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // factor -> '(' expression ')'
+    {
+        const tokens = [_]Token{Token{ .parenthesis = .open }};
+        var parser = Parser.init(&tokens);
+        const result = parser.parseFactor();
+        try std.testing.expectError(ParseError.MissingTokens, result);
+    }
+    {
+        const tokens = [_]Token{ Token{ .parenthesis = .open }, Token{ .number = Token.Number.init(1, 0) } };
+        var parser = Parser.init(&tokens);
+        const result = parser.parseFactor();
+        try std.testing.expectError(ParseError.MissingTokens, result);
+    }
+    {
+        const tokens = [_]Token{ Token{ .parenthesis = .open }, Token{ .number = Token.Number.init(1, 0) }, Token{ .parenthesis = .close } };
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseFactor();
+        const expected = Token.Number.init(1, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // factor -> '-' factor
+    {
+        const tokens = [_]Token{ Token{ .operator = .minus }, Token{ .number = Token.Number.init(1, 0) } };
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseFactor();
+        const expected = Token.Number.init(1, 0).neg();
+        try std.testing.expectEqual(expected, result);
+    }
 }
