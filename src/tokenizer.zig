@@ -1,95 +1,105 @@
 const std = @import("std");
-const Complex = std.math.complex.Complex(f64);
+pub const Complex = std.math.complex.Complex(f64);
 const Tokenizer = @This();
 
-const constant_number_map = std.StaticStringMap(Complex).initComptime(.{
-    .{ "i", Complex.init(0, 1) },
-    .{ "e", Complex.init(std.math.e, 0) },
-    .{ "pi", Complex.init(std.math.pi, 0) },
-    .{ "phi", Complex.init(std.math.phi, 0) },
-    .{ "tau", Complex.init(std.math.tau, 0) },
-});
-
-pub const Operator = enum {
-    add,
-    subtract,
-    multiply,
-    divide,
-    power,
+pub const TokenTag = enum {
+    operator,
+    parenthesis,
+    function,
+    number,
 };
 
-pub const Parenthesis = enum {
-    open,
-    close,
-};
+pub const Token = union(TokenTag) {
+    pub const Number = Complex;
 
-pub const Function = enum {
-    conjugate,
-    real,
-    imaginary,
-    squareRoot,
-    logarithm10,
-    logarithmE,
-    logarithm2,
-    exponential,
-    sine,
-    cosine,
-    tangent,
-    hyperbolicSine,
-    hyperbolicCosine,
-    hyperbolicTangent,
-    inverseSine,
-    inverseCosine,
-    inverseTangent,
-    inverseHyperbolicSine,
-    inverseHyperbolicCosine,
-    inverseHyperbolicTangent,
-    ceiling,
-    floor,
-    absolute,
-    gamma,
+    pub const Parenthesis = enum {
+        open,
+        close,
+    };
 
-    pub const constant_map = std.StaticStringMap(Function).initComptime(.{
-        .{ "conj", .conjugate },
-        .{ "conjugate", .conjugate },
-        .{ "re", .real },
-        .{ "im", .imaginary },
-        .{ "real", .real },
-        .{ "imag", .imaginary },
-        .{ "sqrt", .squareRoot },
-        .{ "log", .logarithm10 },
-        .{ "ln", .logarithmE },
-        .{ "lb", .logarithm2 },
-        .{ "exp", .exponential },
-        .{ "mag", .absolute },
-        .{ "abs", .absolute },
-        .{ "sin", .sine },
-        .{ "cos", .cosine },
-        .{ "tan", .tangent },
-        .{ "sinh", .hyperbolicSine },
-        .{ "cosh", .hyperbolicCosine },
-        .{ "tanh", .hyperbolicTangent },
-        .{ "asin", .inverseSine },
-        .{ "acos", .inverseCosine },
-        .{ "atan", .inverseTangent },
-        .{ "asinh", .inverseHyperbolicSine },
-        .{ "acosh", .inverseHyperbolicCosine },
-        .{ "atanh", .inverseHyperbolicTangent },
-        .{ "ceil", .ceiling },
-        .{ "floor", .floor },
-        .{ "gamma", .gamma },
+    pub const Operator = enum {
+        add,
+        subtract,
+        multiply,
+        divide,
+        power,
+    };
+
+    pub const Function = enum {
+        conjugate,
+        real,
+        imaginary,
+        squareRoot,
+        logarithm10,
+        logarithmE,
+        logarithm2,
+        exponential,
+        sine,
+        cosine,
+        tangent,
+        hyperbolicSine,
+        hyperbolicCosine,
+        hyperbolicTangent,
+        inverseSine,
+        inverseCosine,
+        inverseTangent,
+        inverseHyperbolicSine,
+        inverseHyperbolicCosine,
+        inverseHyperbolicTangent,
+        ceiling,
+        floor,
+        absolute,
+        gamma,
+
+        pub const constant_map = std.StaticStringMap(Function).initComptime(.{
+            .{ "conj", .conjugate },
+            .{ "conjugate", .conjugate },
+            .{ "re", .real },
+            .{ "im", .imaginary },
+            .{ "real", .real },
+            .{ "imag", .imaginary },
+            .{ "sqrt", .squareRoot },
+            .{ "log", .logarithm10 },
+            .{ "ln", .logarithmE },
+            .{ "lb", .logarithm2 },
+            .{ "exp", .exponential },
+            .{ "mag", .absolute },
+            .{ "abs", .absolute },
+            .{ "sin", .sine },
+            .{ "cos", .cosine },
+            .{ "tan", .tangent },
+            .{ "sinh", .hyperbolicSine },
+            .{ "cosh", .hyperbolicCosine },
+            .{ "tanh", .hyperbolicTangent },
+            .{ "asin", .inverseSine },
+            .{ "acos", .inverseCosine },
+            .{ "atan", .inverseTangent },
+            .{ "asinh", .inverseHyperbolicSine },
+            .{ "acosh", .inverseHyperbolicCosine },
+            .{ "atanh", .inverseHyperbolicTangent },
+            .{ "ceil", .ceiling },
+            .{ "floor", .floor },
+            .{ "gamma", .gamma },
+        });
+    };
+
+    const constant_number_map = std.StaticStringMap(Token.Number).initComptime(.{
+        .{ "i", Complex.init(0, 1) },
+        .{ "e", Complex.init(std.math.e, 0) },
+        .{ "pi", Complex.init(std.math.pi, 0) },
+        .{ "phi", Complex.init(std.math.phi, 0) },
+        .{ "tau", Complex.init(std.math.tau, 0) },
     });
-};
 
-pub const Variable = []const u8;
-
-pub const Token = union(enum) {
-    equals,
     operator: Operator,
     parenthesis: Parenthesis,
     function: Function,
-    number: Complex,
-    variable: Variable,
+    number: Number,
+};
+
+pub const TokenizeError = error{
+    InvalidCharacter,
+    InvalidFunction,
 };
 
 data: []const u8,
@@ -99,7 +109,7 @@ pub fn init(data: []const u8) Tokenizer {
     return Tokenizer{ .data = data, .index = 0 };
 }
 
-pub fn next(self: *Tokenizer) !?Token {
+pub fn next(self: *Tokenizer) TokenizeError!?Token {
     while (self.index < self.data.len) {
         switch (self.data[self.index]) {
             ' ', '\t', '\r', '\n' => self.index += 1,
@@ -154,23 +164,16 @@ pub fn next(self: *Tokenizer) !?Token {
                 }
             }
             const variable = self.data[start_index..self.index];
-            if (Function.constant_map.get(variable)) |function| {
+            if (Token.Function.constant_map.get(variable)) |function| {
                 return Token{ .function = function };
             }
-            if (constant_number_map.get(variable)) |number| {
-                return Token{ .number = number };
-            }
-            return Token{ .variable = variable };
+            return TokenizeError.InvalidFunction;
         },
-        '=' => {
-            self.index += 1;
-            return Token.equals;
-        },
-        else => error.InvalidCharacter,
+        else => TokenizeError.InvalidCharacter,
     };
 }
 
-fn parseNumber(self: *Tokenizer) !Complex {
+fn parseNumber(self: *Tokenizer) !Token.Number {
     const start_index = self.index;
     while (self.index < self.data.len) {
         const byte = self.data[self.index];
@@ -214,42 +217,34 @@ test parseNumber {
 }
 
 test next {
-    const data = "value = (100 / 10) - 20";
+    const data = "(100 / 10) - 20";
     var tokenizer = Tokenizer.init(data);
     {
         const token = try tokenizer.next();
-        try std.testing.expectEqualStrings("value", token.?.variable);
+        try std.testing.expectEqual(token, Token{ .parenthesis = .open });
     }
     {
         const token = try tokenizer.next();
-        try std.testing.expectEqual(token, Token.equals);
+        try std.testing.expectEqual(token, Token{ .number = Complex.init(100, 0) });
     }
     {
         const token = try tokenizer.next();
-        try std.testing.expectEqual(token, Token{.parenthesis = .open});
+        try std.testing.expectEqual(token, Token{ .operator = .divide });
     }
     {
         const token = try tokenizer.next();
-        try std.testing.expectEqual(token, Token{.number = Complex.init(100, 0)});
+        try std.testing.expectEqual(token, Token{ .number = Complex.init(10, 0) });
     }
     {
         const token = try tokenizer.next();
-        try std.testing.expectEqual(token, Token{.operator = .divide});
+        try std.testing.expectEqual(token, Token{ .parenthesis = .close });
     }
     {
         const token = try tokenizer.next();
-        try std.testing.expectEqual(token, Token{.number = Complex.init(10, 0)});
+        try std.testing.expectEqual(token, Token{ .operator = .subtract });
     }
     {
         const token = try tokenizer.next();
-        try std.testing.expectEqual(token, Token{.parenthesis = .close});
-    }
-    {
-        const token = try tokenizer.next();
-        try std.testing.expectEqual(token, Token{.operator = .subtract});
-    }
-    {
-        const token = try tokenizer.next();
-        try std.testing.expectEqual(token, Token{.number = Complex.init(20, 0)});
+        try std.testing.expectEqual(token, Token{ .number = Complex.init(20, 0) });
     }
 }
