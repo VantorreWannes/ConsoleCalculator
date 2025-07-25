@@ -1,9 +1,8 @@
 const std = @import("std");
 const Tokenizer = @import("tokenizer.zig");
 const Token = Tokenizer.Token;
-const Number = Token.Number;
 const TokenTag = Tokenizer.TokenTag;
-const TokenizeError = Tokenizer.TokenizeError;
+pub const Number = Token.Number;
 const Parser = @This();
 
 pub const ParseError = error{
@@ -19,23 +18,22 @@ pub fn init(tokens: []const Token) Parser {
 }
 
 pub fn parse(self: *Parser) ParseError!Number {
-    _ = self;
-    return Number.init(0, 0);
+    return self.parseExpression();
 }
 
 // expression -> term (('+' | '-') term)*
-pub fn parseExpression(self: *Parser) ParseError!Number {
+fn parseExpression(self: *Parser) ParseError!Number {
     var term = try self.parseTerm();
     while (self.index < self.tokens.len) {
         const token = self.tokens[self.index];
         if (std.meta.activeTag(token) != TokenTag.operator) break;
         switch (token.operator) {
-            .add => {
+            .plus => {
                 self.index += 1;
                 const other_term = try self.parseTerm();
                 term = term.add(other_term);
             },
-            .subtract => {
+            .minus => {
                 self.index += 1;
                 const other_term = try self.parseTerm();
                 term = term.sub(other_term);
@@ -47,7 +45,7 @@ pub fn parseExpression(self: *Parser) ParseError!Number {
 }
 
 // term -> factor (('*' | '/') factor)*
-pub fn parseTerm(self: *Parser) ParseError!Number {
+fn parseTerm(self: *Parser) ParseError!Number {
     var factor = try self.parseFactor();
     while (self.index < self.tokens.len) {
         const token = self.tokens[self.index];
@@ -70,7 +68,7 @@ pub fn parseTerm(self: *Parser) ParseError!Number {
 }
 
 // factor -> NUMBER | '(' expression ')' | '-' factor
-pub fn parseFactor(self: *Parser) ParseError!Number {
+fn parseFactor(self: *Parser) ParseError!Number {
     if (self.index >= self.tokens.len) return ParseError.MissingTokens;
     switch (self.tokens[self.index]) {
         .number => |number| {
@@ -88,7 +86,7 @@ pub fn parseFactor(self: *Parser) ParseError!Number {
             return expression;
         },
         .operator => |operator| {
-            if (operator != .subtract) return ParseError.InvalidToken;
+            if (operator != .minus) return ParseError.InvalidToken;
             self.index += 1;
             const factor = try self.parseFactor();
             return factor.neg();
@@ -97,6 +95,19 @@ pub fn parseFactor(self: *Parser) ParseError!Number {
     }
 }
 
+test parse {
+    const tokens = [_]Token{
+        Token{ .number = Token.Number.init(2, 0) },
+        Token{ .operator = .plus },
+        Token{ .number = Token.Number.init(3, 0) },
+        Token{ .operator = .multiply },
+        Token{ .number = Token.Number.init(2, 0) },
+    };
+    var parser = Parser.init(&tokens);
+    const result = try parser.parse();
+    const expected = Number.init(8, 0);
+    try std.testing.expectEqual(expected, result);
+}
 
 // expression -> term (('+' | '-') term)*
 test parseExpression {
@@ -111,7 +122,7 @@ test parseExpression {
 
     // expression -> term '+' term
     {
-        const tokens = [_]Token{ Token{ .number = Token.Number.init(2, 0) }, Token{ .operator = .add } };
+        const tokens = [_]Token{ Token{ .number = Token.Number.init(2, 0) }, Token{ .operator = .plus } };
         var parser = Parser.init(&tokens);
         const result = parser.parseExpression();
         try std.testing.expectError(ParseError.MissingTokens, result);
@@ -119,7 +130,7 @@ test parseExpression {
     {
         const tokens = [_]Token{
             Token{ .number = Token.Number.init(2, 0) },
-            Token{ .operator = .add },
+            Token{ .operator = .plus },
             Token{ .number = Token.Number.init(2, 0) },
         };
         var parser = Parser.init(&tokens);
@@ -130,7 +141,7 @@ test parseExpression {
 
     // expression -> term '-' term
     {
-        const tokens = [_]Token{ Token{ .number = Token.Number.init(2, 0) }, Token{ .operator = .subtract } };
+        const tokens = [_]Token{ Token{ .number = Token.Number.init(2, 0) }, Token{ .operator = .minus } };
         var parser = Parser.init(&tokens);
         const result = parser.parseExpression();
         try std.testing.expectError(ParseError.MissingTokens, result);
@@ -138,7 +149,7 @@ test parseExpression {
     {
         const tokens = [_]Token{
             Token{ .number = Token.Number.init(2, 0) },
-            Token{ .operator = .subtract },
+            Token{ .operator = .minus },
             Token{ .number = Token.Number.init(2, 0) },
         };
         var parser = Parser.init(&tokens);
@@ -233,7 +244,7 @@ test parseFactor {
 
     // factor -> '-' factor
     {
-        const tokens = [_]Token{ Token{ .operator = .subtract }, Token{ .number = Token.Number.init(1, 0) } };
+        const tokens = [_]Token{ Token{ .operator = .minus }, Token{ .number = Token.Number.init(1, 0) } };
         var parser = Parser.init(&tokens);
         const result = try parser.parseFactor();
         const expected = Token.Number.init(1, 0).neg();
