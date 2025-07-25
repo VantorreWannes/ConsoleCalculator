@@ -173,9 +173,12 @@ pub fn next(self: *Tokenizer) TokenizeError!?Token {
                     else => break,
                 }
             }
-            const variable = self.data[start_index..self.index];
-            if (Token.Function.constant_map.get(variable)) |function| {
+            const identifier = self.data[start_index..self.index];
+            if (Token.Function.constant_map.get(identifier)) |function| {
                 return Token{ .function = function };
+            }
+            if (Token.constant_number_map.get(identifier)) |number| {
+                return Token{ .number = number };
             }
             return TokenizeError.InvalidFunction;
         },
