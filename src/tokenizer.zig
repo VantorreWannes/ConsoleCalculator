@@ -18,8 +18,8 @@ pub const Token = union(TokenTag) {
     };
 
     pub const Operator = enum {
-        add,
-        subtract,
+        plus,
+        minus,
         multiply,
         divide,
         power,
@@ -134,11 +134,11 @@ pub fn next(self: *Tokenizer) TokenizeError!?Token {
     return switch (self.data[self.index]) {
         '+' => {
             self.index += 1;
-            return Token{ .operator = .add };
+            return Token{ .operator = .plus };
         },
         '-' => {
             self.index += 1;
-            return Token{ .operator = .subtract };
+            return Token{ .operator = .minus };
         },
         '*' => {
             self.index += 1;
@@ -251,7 +251,7 @@ test next {
     }
     {
         const token = try tokenizer.next();
-        try std.testing.expectEqual(token, Token{ .operator = .subtract });
+        try std.testing.expectEqual(token, Token{ .operator = .minus });
     }
     {
         const token = try tokenizer.next();
