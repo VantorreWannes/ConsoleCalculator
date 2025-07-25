@@ -105,6 +105,16 @@ pub const TokenizeError = error{
 data: []const u8,
 index: usize = 0,
 
+pub fn tokens(self: *Tokenizer, allocator: std.mem.Allocator) (TokenizeError || std.mem.Allocator.Error)![]Token {
+    var collection = std.ArrayList(Token).init(allocator);
+    defer collection.deinit();
+
+    while (try self.next()) |token| {
+        try collection.append(token);
+    }
+    return try collection.toOwnedSlice();
+}
+
 pub fn init(data: []const u8) Tokenizer {
     return Tokenizer{ .data = data, .index = 0 };
 }
@@ -247,4 +257,13 @@ test next {
         const token = try tokenizer.next();
         try std.testing.expectEqual(token, Token{ .number = Complex.init(20, 0) });
     }
+}
+
+test tokens {
+    const allocator = std.testing.allocator;
+    const data = "(100 / 10) - 20";
+    var tokenizer = Tokenizer.init(data);
+    const data_tokens = try tokenizer.tokens(allocator);
+    defer allocator.free(data_tokens);
+    try std.testing.expectEqual(7, data_tokens.len);
 }
