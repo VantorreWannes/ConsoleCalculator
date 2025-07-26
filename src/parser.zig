@@ -69,8 +69,15 @@ fn parseTerm(self: *Parser) ParseError!Number {
 
 // power -> factor ('^' power)?
 fn parsePower(self: *Parser) ParseError!Number {
-    _ = self;
-    return Number.init(1, 0);
+    var base = try self.parseFactor();
+    if (self.index >= self.tokens.len) return base;
+    const token = self.tokens[self.index];
+    if (std.meta.activeTag(token) == TokenTag.operator and token.operator == .power) {
+        self.index += 1;
+        const exponent = try self.parsePower();
+        base = std.math.complex.pow(base, exponent);
+    }
+    return base;
 }
 
 // factor -> NUMBER | CONSTANT | FUNCTION '(' expression ')' | '(' expression ')' | '-' factor
@@ -164,6 +171,32 @@ pub fn applyFunction(function: Token.Function, number: Number) Number {
     };
 }
 
+// power -> factor ('^' power)?
+test parsePower {
+
+    // power -> factor
+    {
+        const tokens = [_]Token{Token{ .number = Token.Number.init(1, 0) }};
+        var parser = Parser.init(&tokens);
+        const result = try parser.parsePower();
+        const expected = Token.Number.init(1, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // power -> factor '^' power
+    {
+        const tokens = [_]Token{
+            Token{ .number = Token.Number.init(2, 0) },
+            Token{ .operator = .power },
+            Token{ .number = Token.Number.init(2, 0) },
+        };
+        var parser = Parser.init(&tokens);
+        const result = try parser.parsePower();
+        const expected = Token.Number.init(4, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+}
+
 // factor -> NUMBER | CONSTANT | FUNCTION '(' expression ')' | '(' expression ')' | '-' factor
 test parseFactor {
 
@@ -187,7 +220,7 @@ test parseFactor {
 
     // factor -> FUNCTION '(' expression ')'
     {
-        const tokens = [_]Token{ Token{ .function = .absolute }, Token{ .parenthesis = .open }, Token{ .number = Token.Number.init(1, 1) }, Token{ .parenthesis = .close } };
+        const tokens = [_]Token{ Token{ .function = .absolute }, Token{ .parenthesis = .open }, Token{ .number = Token.Number.init(-1, 0) }, Token{ .parenthesis = .close } };
         var parser = Parser.init(&tokens);
         const result = try parser.parseFactor();
         const expected = Token.Number.init(1, 0);
