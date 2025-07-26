@@ -15,6 +15,24 @@ pub fn calculate(allocator: std.mem.Allocator, input: []const u8) CalculateError
     return parser.parse();
 }
 
+test calculate {
+    const allocator = std.testing.allocator;
+
+    {
+        const expression = "3*(4+5^2)/-4";
+        const result = try calculate(allocator, expression);
+        const expected = Number.init(-21, 0);
+        try std.testing.expectApproxEqRel(expected.re, result.re, 0.1);
+    }
+
+    {
+        const expression = "1+abs(-4)";
+        const result = try calculate(allocator, expression);
+        const expected = Number.init(5, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+}
+
 test {
     std.testing.refAllDecls(Tokenizer);
     std.testing.refAllDecls(Parser);
