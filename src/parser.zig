@@ -171,8 +171,59 @@ pub fn applyFunction(function: Token.Function, number: Number) Number {
     };
 }
 
+// expression -> term (('+' | '-') term)*
+test parseExpression {
+    // expression -> term
+    {
+        const tokens = [_]Token{Token{ .number = Token.Number.init(2, 0) }};
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseExpression();
+        const expected = Token.Number.init(2, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // expression -> term '+' term
+    {
+        const tokens = [_]Token{ Token{ .number = Token.Number.init(2, 0) }, Token{ .operator = .plus } };
+        var parser = Parser.init(&tokens);
+        const result = parser.parseExpression();
+        try std.testing.expectError(ParseError.MissingTokens, result);
+    }
+    {
+        const tokens = [_]Token{
+            Token{ .number = Token.Number.init(2, 0) },
+            Token{ .operator = .plus },
+            Token{ .number = Token.Number.init(2, 0) },
+        };
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseExpression();
+        const expected = Token.Number.init(4, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // expression -> term '-' term
+    {
+        const tokens = [_]Token{ Token{ .number = Token.Number.init(2, 0) }, Token{ .operator = .minus } };
+        var parser = Parser.init(&tokens);
+        const result = parser.parseExpression();
+        try std.testing.expectError(ParseError.MissingTokens, result);
+    }
+    {
+        const tokens = [_]Token{
+            Token{ .number = Token.Number.init(2, 0) },
+            Token{ .operator = .minus },
+            Token{ .number = Token.Number.init(2, 0) },
+        };
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseExpression();
+        const expected = Token.Number.init(0, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+}
+
 // term -> power (('*' | '/') power)*
 test parseTerm {
+
     // term -> power
     {
         const tokens = [_]Token{Token{ .number = Token.Number.init(2, 0) }};
