@@ -171,8 +171,23 @@ pub fn applyFunction(function: Token.Function, number: Number) Number {
     };
 }
 
+test parse {
+    const tokens = [_]Token{
+        Token{ .number = Token.Number.init(2, 0) },
+        Token{ .operator = .plus },
+        Token{ .number = Token.Number.init(3, 0) },
+        Token{ .operator = .multiply },
+        Token{ .number = Token.Number.init(2, 0) },
+    };
+    var parser = Parser.init(&tokens);
+    const result = try parser.parse();
+    const expected = Number.init(8, 0);
+    try std.testing.expectEqual(expected, result);
+}
+
 // expression -> term (('+' | '-') term)*
 test parseExpression {
+
     // expression -> term
     {
         const tokens = [_]Token{Token{ .number = Token.Number.init(2, 0) }};
