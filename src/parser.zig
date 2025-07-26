@@ -44,7 +44,7 @@ fn parseExpression(self: *Parser) ParseError!Number {
     return term;
 }
 
-// term -> factor (('*' | '/') factor)*
+// term -> power (('*' | '/') power)*
 fn parseTerm(self: *Parser) ParseError!Number {
     var factor = try self.parsePower();
     while (self.index < self.tokens.len) {
@@ -169,6 +169,56 @@ pub fn applyFunction(function: Token.Function, number: Number) Number {
         .inverseHyperbolicCosine => std.math.complex.acosh(number),
         .inverseHyperbolicTangent => std.math.complex.atanh(number),
     };
+}
+
+// term -> power (('*' | '/') power)*
+test parseTerm {
+    // term -> power
+    {
+        const tokens = [_]Token{Token{ .number = Token.Number.init(2, 0) }};
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseTerm();
+        const expected = Token.Number.init(2, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // term -> power '*' power
+    {
+        const tokens = [_]Token{ Token{ .number = Token.Number.init(2, 0) }, Token{ .operator = .multiply } };
+        var parser = Parser.init(&tokens);
+        const result = parser.parseTerm();
+        try std.testing.expectError(ParseError.MissingTokens, result);
+    }
+    {
+        const tokens = [_]Token{
+            Token{ .number = Token.Number.init(2, 0) },
+            Token{ .operator = .multiply },
+            Token{ .number = Token.Number.init(2, 0) },
+        };
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseTerm();
+        const expected = Token.Number.init(4, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // term -> power '/' power
+    {
+        const tokens = [_]Token{ Token{ .number = Token.Number.init(2, 0) }, Token{ .operator = .divide } };
+        var parser = Parser.init(&tokens);
+        const result = parser.parseTerm();
+        try std.testing.expectError(ParseError.MissingTokens, result);
+    }
+    {
+        const tokens = [_]Token{
+            Token{ .number = Token.Number.init(2, 0) },
+            Token{ .operator = .divide },
+            Token{ .number = Token.Number.init(2, 0) },
+        };
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseTerm();
+        const expected = Token.Number.init(1, 0);
+        try std.testing.expectEqual(expected, result);
+    }
 }
 
 // power -> factor ('^' power)?
