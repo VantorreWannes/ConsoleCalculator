@@ -1,7 +1,12 @@
+//! This file defines the `Tokenizer` for the calculator.
+//! It takes a string expression and breaks it down into a sequence of tokens
+//! that can be processed by the parser.
+
 const std = @import("std");
 pub const Complex = std.math.complex.Complex(f64);
 const Tokenizer = @This();
 
+/// Represents the different kinds of tokens that can be found in an expression.
 pub const TokenTag = enum {
     operator,
     parenthesis,
@@ -9,6 +14,8 @@ pub const TokenTag = enum {
     number,
 };
 
+/// Represents a token in a mathematical expression.
+/// This can be a number, an operator, a parenthesis, or a function.
 pub const Token = union(TokenTag) {
     pub const Number = Complex;
 
@@ -97,6 +104,7 @@ pub const Token = union(TokenTag) {
     number: Number,
 };
 
+/// Errors that can occur during tokenization.
 pub const TokenizeError = error{
     InvalidCharacter,
     InvalidFunction,
@@ -105,6 +113,8 @@ pub const TokenizeError = error{
 data: []const u8,
 index: usize = 0,
 
+/// Tokenizes the entire input expression and returns a slice of tokens.
+/// Takes an allocator to allocate memory for the token slice.
 pub fn tokens(self: *Tokenizer, allocator: std.mem.Allocator) TokenizeError![]Token {
     var collection = std.ArrayList(Token).init(allocator);
     defer collection.deinit();
@@ -115,10 +125,14 @@ pub fn tokens(self: *Tokenizer, allocator: std.mem.Allocator) TokenizeError![]To
     return try collection.toOwnedSlice();
 }
 
+/// Initializes a new Tokenizer with the given input data.
 pub fn init(data: []const u8) Tokenizer {
     return Tokenizer{ .data = data, .index = 0 };
 }
 
+/// Parses and returns the next token from the input stream.
+/// Returns `null` if the end of the stream is reached.
+/// Skips whitespace characters.
 pub fn next(self: *Tokenizer) TokenizeError!?Token {
     while (self.index < self.data.len) {
         switch (self.data[self.index]) {

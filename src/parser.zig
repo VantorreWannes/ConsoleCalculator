@@ -1,3 +1,15 @@
+//! This file implements the parser for the calculator.
+//! It takes a sequence of tokens from the `Tokenizer` and evaluates them
+//! according to the rules of mathematical expressions. The parser follows
+//! a recursive descent approach to handle operator precedence and associativity.
+//!
+//! The grammar rules are as follows:
+//! 
+//! - expression -> `term (('+' | '-') term)*`
+//! - term       -> `power (('*' | '/') power)*`
+//! - power      -> `factor ('^' power)?`
+//! - factor     -> `NUMBER | CONSTANT | FUNCTION '(' expression ')' | '(' expression ')' | '-' factor`
+
 const std = @import("std");
 const Tokenizer = @import("tokenizer.zig");
 const Token = Tokenizer.Token;
@@ -5,6 +17,7 @@ const TokenTag = Tokenizer.TokenTag;
 pub const Number = Token.Number;
 const Parser = @This();
 
+/// Errors that can occur during parsing.
 pub const ParseError = error{
     InvalidToken,
     MissingTokens,
@@ -13,15 +26,19 @@ pub const ParseError = error{
 tokens: []const Token,
 index: usize = 0,
 
+/// Initializes a new Parser with a slice of tokens.
 pub fn init(tokens: []const Token) Parser {
     return Parser{ .tokens = tokens, .index = 0 };
 }
 
+/// Parses the entire sequence of tokens and returns the final result.
+/// This is the entry point for the parsing process.
 pub fn parse(self: *Parser) ParseError!Number {
     return self.parseExpression();
 }
 
-// expression -> term (('+' | '-') term)*
+/// Parses an expression according to the grammar rule:
+/// expression -> term (('+' | '-') term)*
 fn parseExpression(self: *Parser) ParseError!Number {
     var term = try self.parseTerm();
     while (self.index < self.tokens.len) {
@@ -44,7 +61,8 @@ fn parseExpression(self: *Parser) ParseError!Number {
     return term;
 }
 
-// term -> power (('*' | '/') power)*
+/// Parses a term according to the grammar rule:
+/// term -> power (('*' | '/') power)*
 fn parseTerm(self: *Parser) ParseError!Number {
     var factor = try self.parsePower();
     while (self.index < self.tokens.len) {
@@ -67,7 +85,8 @@ fn parseTerm(self: *Parser) ParseError!Number {
     return factor;
 }
 
-// power -> factor ('^' power)?
+/// Parses a power expression according to the grammar rule:
+/// power -> factor ('^' power)?
 fn parsePower(self: *Parser) ParseError!Number {
     var base = try self.parseFactor();
     if (self.index >= self.tokens.len) return base;
@@ -80,7 +99,8 @@ fn parsePower(self: *Parser) ParseError!Number {
     return base;
 }
 
-// factor -> NUMBER | CONSTANT | FUNCTION '(' expression ')' | '(' expression ')' | '-' factor
+/// Parses a factor according to the grammar rule:
+/// factor -> NUMBER | CONSTANT | FUNCTION '(' expression ')' | '(' expression ')' | '-' factor
 fn parseFactor(self: *Parser) ParseError!Number {
     if (self.index >= self.tokens.len) return ParseError.MissingTokens;
     switch (self.tokens[self.index]) {
@@ -124,7 +144,10 @@ fn parseFactor(self: *Parser) ParseError!Number {
     }
 }
 
-pub fn applyFunction(function: Token.Function, number: Number) Number {
+/// Applies a mathematical function to a complex number.
+/// `function` is the function to apply, and `number` is the argument.
+/// Returns the result of the function application.
+fn applyFunction(function: Token.Function, number: Number) Number {
     return switch (function) {
         .absolute => Number.init(std.math.complex.abs(number), 0),
         .conjugate => std.math.complex.conj(number),
