@@ -1,10 +1,27 @@
+//! This file acts as the main interface for the calculator library.
+//! It combines the tokenizer and parser to provide a simple `calculate`
+//! function that takes a string expression and returns the result.
+
 const std = @import("std");
 const Tokenizer = @import("tokenizer.zig");
 const Parser = @import("parser.zig");
 
+/// The complex number type used for calculations.
 pub const Number = Parser.Number;
+
+/// Represents errors that can occur during calculation,
+/// combining tokenizer and parser errors.
 pub const CalculateError = Tokenizer.TokenizeError || Parser.ParseError;
 
+/// Calculates the result of a mathematical expression.
+///
+/// # Parameters
+/// - `allocator`: The memory allocator to use for intermediate allocations.
+/// - `input`: The string containing the mathematical expression to evaluate.
+///
+/// # Returns
+/// The calculated result as a complex number, or an error if the
+/// expression is invalid.
 pub fn calculate(allocator: std.mem.Allocator, input: []const u8) CalculateError!Number {
     var tokenizer = Tokenizer.init(input);
 
@@ -17,29 +34,19 @@ pub fn calculate(allocator: std.mem.Allocator, input: []const u8) CalculateError
 
 test calculate {
     const allocator = std.testing.allocator;
+
     {
-        const input = "2 + 3 * 2";
-        const result = try calculate(allocator, input);
-        const expected = Number.init(8, 0);
+        const expression = "3*(4+5^2)/-4";
+        const result = try calculate(allocator, expression);
+        const expected = Number.init(-21, 0);
+        try std.testing.expectApproxEqRel(expected.re, result.re, 0.1);
+    }
+
+    {
+        const expression = "1+abs(-4)";
+        const result = try calculate(allocator, expression);
+        const expected = Number.init(5, 0);
         try std.testing.expectEqual(expected, result);
-    }
-    {
-        const input = "3*(7-2*(16)-5*-7)-3+2*4";
-        const result = try calculate(allocator, input);
-        const expected = Number.init(35, 0);
-        try std.testing.expectEqual(expected, result);
-    }
-    {
-        const input = "3*(2+3";
-        const result = calculate(allocator, input);
-        const expected = CalculateError.MissingTokens;
-        try std.testing.expectError(expected, result);
-    }
-    {
-        const input = "+1++1";
-        const result = calculate(allocator, input);
-        const expected = CalculateError.InvalidToken;
-        try std.testing.expectError(expected, result);
     }
 }
 

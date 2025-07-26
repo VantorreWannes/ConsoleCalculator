@@ -1,3 +1,15 @@
+//! This file implements the parser for the calculator.
+//! It takes a sequence of tokens from the `Tokenizer` and evaluates them
+//! according to the rules of mathematical expressions. The parser follows
+//! a recursive descent approach to handle operator precedence and associativity.
+//!
+//! The grammar rules are as follows:
+//! 
+//! - expression -> `term (('+' | '-') term)*`
+//! - term       -> `power (('*' | '/') power)*`
+//! - power      -> `factor ('^' power)?`
+//! - factor     -> `NUMBER | CONSTANT | FUNCTION '(' expression ')' | '(' expression ')' | '-' factor`
+
 const std = @import("std");
 const Tokenizer = @import("tokenizer.zig");
 const Token = Tokenizer.Token;
@@ -5,6 +17,7 @@ const TokenTag = Tokenizer.TokenTag;
 pub const Number = Token.Number;
 const Parser = @This();
 
+/// Errors that can occur during parsing.
 pub const ParseError = error{
     InvalidToken,
     MissingTokens,
@@ -13,15 +26,19 @@ pub const ParseError = error{
 tokens: []const Token,
 index: usize = 0,
 
+/// Initializes a new Parser with a slice of tokens.
 pub fn init(tokens: []const Token) Parser {
     return Parser{ .tokens = tokens, .index = 0 };
 }
 
+/// Parses the entire sequence of tokens and returns the final result.
+/// This is the entry point for the parsing process.
 pub fn parse(self: *Parser) ParseError!Number {
     return self.parseExpression();
 }
 
-// expression -> term (('+' | '-') term)*
+/// Parses an expression according to the grammar rule:
+/// expression -> term (('+' | '-') term)*
 fn parseExpression(self: *Parser) ParseError!Number {
     var term = try self.parseTerm();
     while (self.index < self.tokens.len) {
@@ -44,21 +61,22 @@ fn parseExpression(self: *Parser) ParseError!Number {
     return term;
 }
 
-// term -> factor (('*' | '/') factor)*
+/// Parses a term according to the grammar rule:
+/// term -> power (('*' | '/') power)*
 fn parseTerm(self: *Parser) ParseError!Number {
-    var factor = try self.parseFactor();
+    var factor = try self.parsePower();
     while (self.index < self.tokens.len) {
         const token = self.tokens[self.index];
         if (std.meta.activeTag(token) != TokenTag.operator) break;
         switch (token.operator) {
             .multiply => {
                 self.index += 1;
-                const other_factor = try self.parseFactor();
+                const other_factor = try self.parsePower();
                 factor = factor.mul(other_factor);
             },
             .divide => {
                 self.index += 1;
-                const other_factor = try self.parseFactor();
+                const other_factor = try self.parsePower();
                 factor = factor.div(other_factor);
             },
             else => break,
@@ -67,7 +85,22 @@ fn parseTerm(self: *Parser) ParseError!Number {
     return factor;
 }
 
-// factor -> NUMBER | '(' expression ')' | '-' factor
+/// Parses a power expression according to the grammar rule:
+/// power -> factor ('^' power)?
+fn parsePower(self: *Parser) ParseError!Number {
+    var base = try self.parseFactor();
+    if (self.index >= self.tokens.len) return base;
+    const token = self.tokens[self.index];
+    if (std.meta.activeTag(token) == TokenTag.operator and token.operator == .power) {
+        self.index += 1;
+        const exponent = try self.parsePower();
+        base = std.math.complex.pow(base, exponent);
+    }
+    return base;
+}
+
+/// Parses a factor according to the grammar rule:
+/// factor -> NUMBER | CONSTANT | FUNCTION '(' expression ')' | '(' expression ')' | '-' factor
 fn parseFactor(self: *Parser) ParseError!Number {
     if (self.index >= self.tokens.len) return ParseError.MissingTokens;
     switch (self.tokens[self.index]) {
@@ -91,8 +124,74 @@ fn parseFactor(self: *Parser) ParseError!Number {
             const factor = try self.parseFactor();
             return factor.neg();
         },
-        else => return ParseError.InvalidToken,
+        .function => |function| {
+            self.index += 1;
+            {
+                if (self.index >= self.tokens.len) return ParseError.MissingTokens;
+                const token = self.tokens[self.index];
+                if (std.meta.activeTag(token) != TokenTag.parenthesis or token.parenthesis != .open) return ParseError.MissingTokens;
+            }
+            self.index += 1;
+            const argument = try self.parseExpression();
+            {
+                if (self.index >= self.tokens.len) return ParseError.MissingTokens;
+                const token = self.tokens[self.index];
+                if (std.meta.activeTag(token) != TokenTag.parenthesis or token.parenthesis != .close) return ParseError.MissingTokens;
+            }
+            self.index += 1;
+            return applyFunction(function, argument);
+        },
     }
+}
+
+/// Applies a mathematical function to a complex number.
+/// `function` is the function to apply, and `number` is the argument.
+/// Returns the result of the function application.
+fn applyFunction(function: Token.Function, number: Number) Number {
+    return switch (function) {
+        .absolute => Number.init(std.math.complex.abs(number), 0),
+        .conjugate => std.math.complex.conj(number),
+        .exponential => std.math.complex.exp(number),
+        .gamma => blk: {
+            const re = std.math.gamma(f64, number.re);
+            const im = if (number.im == 0) 0 else std.math.gamma(f64, number.im);
+            break :blk Number.init(re, im);
+        },
+        .ceiling => blk: {
+            const re = std.math.ceil(number.re);
+            const im = std.math.ceil(number.im);
+            break :blk Number.init(re, im);
+        },
+        .floor => blk: {
+            const re = std.math.floor(number.re);
+            const im = std.math.floor(number.im);
+            break :blk Number.init(re, im);
+        },
+        .real => Number.init(number.re, 0),
+        .imaginary => Number.init(number.im, 0),
+        .squareRoot => std.math.complex.sqrt(number),
+        .logarithm10 => blk: {
+            const log10 = std.math.complex.log(Number.init(10, 0));
+            break :blk std.math.complex.log(number).div(log10);
+        },
+        .logarithm2 => blk: {
+            const log2 = std.math.complex.log(Number.init(2, 0));
+            break :blk std.math.complex.log(number).div(log2);
+        },
+        .logarithmE => std.math.complex.log(number),
+        .sine => std.math.complex.sin(number),
+        .cosine => std.math.complex.cos(number),
+        .tangent => std.math.complex.tan(number),
+        .hyperbolicSine => std.math.complex.sinh(number),
+        .hyperbolicCosine => std.math.complex.cosh(number),
+        .hyperbolicTangent => std.math.complex.tanh(number),
+        .inverseSine => std.math.complex.asin(number),
+        .inverseCosine => std.math.complex.acos(number),
+        .inverseTangent => std.math.complex.atan(number),
+        .inverseHyperbolicSine => std.math.complex.asinh(number),
+        .inverseHyperbolicCosine => std.math.complex.acosh(number),
+        .inverseHyperbolicTangent => std.math.complex.atanh(number),
+    };
 }
 
 test parse {
@@ -111,6 +210,7 @@ test parse {
 
 // expression -> term (('+' | '-') term)*
 test parseExpression {
+
     // expression -> term
     {
         const tokens = [_]Token{Token{ .number = Token.Number.init(2, 0) }};
@@ -159,9 +259,10 @@ test parseExpression {
     }
 }
 
-// term -> factor (('*' | '/') factor)*
+// term -> power (('*' | '/') power)*
 test parseTerm {
-    // term -> factor
+
+    // term -> power
     {
         const tokens = [_]Token{Token{ .number = Token.Number.init(2, 0) }};
         var parser = Parser.init(&tokens);
@@ -170,7 +271,7 @@ test parseTerm {
         try std.testing.expectEqual(expected, result);
     }
 
-    // term -> factor '*' factor
+    // term -> power '*' power
     {
         const tokens = [_]Token{ Token{ .number = Token.Number.init(2, 0) }, Token{ .operator = .multiply } };
         var parser = Parser.init(&tokens);
@@ -189,7 +290,7 @@ test parseTerm {
         try std.testing.expectEqual(expected, result);
     }
 
-    // term -> factor '/' factor
+    // term -> power '/' power
     {
         const tokens = [_]Token{ Token{ .number = Token.Number.init(2, 0) }, Token{ .operator = .divide } };
         var parser = Parser.init(&tokens);
@@ -209,12 +310,56 @@ test parseTerm {
     }
 }
 
-// factor -> NUMBER | '(' expression ')' | '-' factor
+// power -> factor ('^' power)?
+test parsePower {
+
+    // power -> factor
+    {
+        const tokens = [_]Token{Token{ .number = Token.Number.init(1, 0) }};
+        var parser = Parser.init(&tokens);
+        const result = try parser.parsePower();
+        const expected = Token.Number.init(1, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // power -> factor '^' power
+    {
+        const tokens = [_]Token{
+            Token{ .number = Token.Number.init(2, 0) },
+            Token{ .operator = .power },
+            Token{ .number = Token.Number.init(2, 0) },
+        };
+        var parser = Parser.init(&tokens);
+        const result = try parser.parsePower();
+        const expected = Token.Number.init(4, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+}
+
+// factor -> NUMBER | CONSTANT | FUNCTION '(' expression ')' | '(' expression ')' | '-' factor
 test parseFactor {
 
     // factor -> NUMBER
     {
         const tokens = [_]Token{Token{ .number = Token.Number.init(1, 0) }};
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseFactor();
+        const expected = Token.Number.init(1, 0);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // factor -> CONSTANT
+    {
+        const tokens = [_]Token{Token{ .number = Token.Number.init(0, 1) }};
+        var parser = Parser.init(&tokens);
+        const result = try parser.parseFactor();
+        const expected = Token.Number.init(0, 1);
+        try std.testing.expectEqual(expected, result);
+    }
+
+    // factor -> FUNCTION '(' expression ')'
+    {
+        const tokens = [_]Token{ Token{ .function = .absolute }, Token{ .parenthesis = .open }, Token{ .number = Token.Number.init(-1, 0) }, Token{ .parenthesis = .close } };
         var parser = Parser.init(&tokens);
         const result = try parser.parseFactor();
         const expected = Token.Number.init(1, 0);
